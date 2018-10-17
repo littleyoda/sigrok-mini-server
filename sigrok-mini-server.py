@@ -68,7 +68,7 @@ def handleCmdInfo(c):
                 "version": device.version,
                 "id": device.connection_id(),
                 "hash": hash(device),
-                "config": []
+                "settings": []
         }
         info["deviceinfo"].append(dev)
         for key in device.config_keys():
@@ -130,7 +130,7 @@ def handleCmd(c):
     elif (cmd == "set"):
         handleCmdSet(c)
         handleCmdGet(c) # Return changed Value
-    elif (cmd == "set"):
+    elif (cmd == "get"):
         handleCmdGet(c)
 
 
