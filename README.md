@@ -106,7 +106,7 @@ The value of the hash-attribute is used to identify the device in all messages r
 }
 ```
 
-### Set Configs
+## Set Configs
 e.g. The following command changes the samplerate to 10
 
 Request:
@@ -116,11 +116,16 @@ Response:
 `{"device": ":Demo device::", "msgtype": "value", "value": "10", "key": "samplerate"}`
 
 
-### Get Configs
+## Get Configs
 Request:
 `{ "cmd": "get", "key": "samplerate", "hash":":Demo device::"}`
 
 Response:
 `{"device": ":Demo device::", "msgtype": "value", "value": "1", "key": "samplerate"}`
 
+
+# Multiple Devices
+You can access more than one device
+
+e.g.`sigrok-mini-server.py -d demo samplerate=1 -d korad-kaxxxxp:conn=/dev/ttyACM0`
 
