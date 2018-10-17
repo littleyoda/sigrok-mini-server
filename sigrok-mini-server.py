@@ -148,11 +148,12 @@ def datafeed_in(device, packet):
     elif (packet.type == PacketType.FRAME_END):
         pass
     elif (packet.type == PacketType.LOGIC):
-        print(packet.payload)
-        print(packet.payload.unit_size())
-        print(packet.payload.data_pointer())
-        print(packet.payload.data_length())
-        print("=================================")
+#        print(packet.payload)
+#        print(packet.payload.unit_size())
+#        print(packet.payload.data_pointer())
+#        print(packet.payload.data_length())
+#        print("=================================")
+         pass
     elif (packet.type == PacketType.ANALOG):
         # https://sigrok.org/api/libsigrok/unstable/bindings/python/a00722.html
         if not len(packet.payload.channels):
