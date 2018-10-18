@@ -14,7 +14,6 @@ devicehashes = []
 
 sigroklock = threading.Lock()
 
-
 def openDevice(arg):
     print("Creating Device with " + arg)
     driver_spec = arg.split(":")
@@ -148,12 +147,7 @@ def datafeed_in(device, packet):
     elif (packet.type == PacketType.FRAME_END):
         pass
     elif (packet.type == PacketType.LOGIC):
-#        print(packet.payload)
-#        print(packet.payload.unit_size())
-#        print(packet.payload.data_pointer())
-#        print(packet.payload.data_length())
-#        print("=================================")
-         pass
+        pass
     elif (packet.type == PacketType.ANALOG):
         # https://sigrok.org/api/libsigrok/unstable/bindings/python/a00722.html
         if not len(packet.payload.channels):
@@ -162,6 +156,7 @@ def datafeed_in(device, packet):
         outputdata = {
             "msgtype": "data",
             "channels": [],
+            "unit":  packet.payload.unit.name,
             "device": {
                 "hash": h,
                 "id": devicehashes.index(hash(device))
