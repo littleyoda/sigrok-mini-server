@@ -14,6 +14,7 @@ devicehashes = []
 
 sigroklock = threading.Lock()
 
+
 def openDevice(arg):
     print("Creating Device with " + arg)
     driver_spec = arg.split(":")
@@ -67,7 +68,8 @@ def handleCmdInfo(c):
                 "version": device.version,
                 "id": device.connection_id(),
                 "hash": hash(device),
-                "settings": []
+                "settings": [],
+                "channels": []
         }
         info["deviceinfo"].append(dev)
         for key in device.config_keys():
@@ -98,6 +100,15 @@ def handleCmdInfo(c):
                        })
                 except Exception as e:
                     print('Exception: ' + str(e))
+        for channel in device.channels:
+            dev["channels"].append(
+                {
+                    "name": channel.name,
+                    "enabled": str(channel.enabled),
+                    "idx": str(channel.index),
+                    "type": channel.type.name
+                }
+            )
     json_string = json.dumps(info)
     send(json_string + "\n")
 
@@ -147,6 +158,8 @@ def datafeed_in(device, packet):
     elif (packet.type == PacketType.FRAME_END):
         pass
     elif (packet.type == PacketType.LOGIC):
+#        for v in packet.payload.data:
+#           print("{0:08b}".format(v))
         pass
     elif (packet.type == PacketType.ANALOG):
         # https://sigrok.org/api/libsigrok/unstable/bindings/python/a00722.html
