@@ -8,6 +8,10 @@ Delivers data from sigrok supported devices via TCP/IP in JSON Format
 * only analog sigrok packets supported, no logic packets
 
 # How to use (under Linux)
+Currently you need a patched version of sigrok
+
+see https://github.com/sigrokproject/libsigrok/pull/14
+
 On the first console
 `./sigrok-mini-server.py  -d demo samplerate=1`
 
