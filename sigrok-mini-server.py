@@ -71,7 +71,8 @@ def collectDeviceInfo():
                 "hash": hash(device),
                 "settings": [],
                 "channels": [],
-                "enabledChannels": []
+                "enabledAnalogChannels": [],
+                "enabledLogicChannels": []
         }
         info["deviceinfo"].append(dev)
         for key in device.config_keys():
@@ -110,8 +111,10 @@ def collectDeviceInfo():
                     "type": channel.type.name
                 }
             dev["channels"].append(cinfo)
-            if channel.enabled:
-                dev["enabledChannels"].append(cinfo)
+            if channel.enabled and channel.type.name == "LOGIC":
+                    dev["enabledLogicChannels"].append(cinfo)
+            if channel.enabled and channel.type.name == "ANALOG":
+                    dev["enabledAnalogChannels"].append(cinfo)
         return info
         
 
@@ -179,15 +182,15 @@ def datafeed_in(device, packet):
         }
         data = packet.payload.data
         dinfo = deviceinfo["deviceinfo"][didx]
-        enabled = len(dinfo["enabledChannels"])
+        enabled = len(dinfo["enabledLogicChannels"])
         # Create Container
-        for c in dinfo["enabledChannels"]:
+        for c in dinfo["enabledLogicChannels"]:
             outputdata["channels"].append(c["name"])
             outputdata[c["name"]] = []
         # Fill Container with data
         for i in xrange(0,len(data),packet.payload.unit_size()):
             for j in xrange(0, enabled):
-                c = dinfo["enabledChannels"][j]
+                c = dinfo["enabledLogicChannels"][j]
                 value = (data[ i + j / 8] >> (j % 8)) & 1
                 outputdata[c["name"]].append(str(value))
                 
