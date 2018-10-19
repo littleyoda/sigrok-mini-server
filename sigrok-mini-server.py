@@ -11,6 +11,7 @@ import json
 clients = []
 devices = []
 devicehashes = []
+deviceinfo = {}
 
 sigroklock = threading.Lock()
 
@@ -56,7 +57,7 @@ def handleDeviceOptions(device, string):
         device.config_set(key, key.parse_string(value))
 
 
-def handleCmdInfo(c):
+def collectDeviceInfo():
     info = {
                     "msgtype": "deviceinfo",
                     "deviceinfo": []
@@ -69,7 +70,8 @@ def handleCmdInfo(c):
                 "id": device.connection_id(),
                 "hash": hash(device),
                 "settings": [],
-                "channels": []
+                "channels": [],
+                "enabledChannels": []
         }
         info["deviceinfo"].append(dev)
         for key in device.config_keys():
@@ -101,14 +103,20 @@ def handleCmdInfo(c):
                 except Exception as e:
                     print('Exception: ' + str(e))
         for channel in device.channels:
-            dev["channels"].append(
-                {
+            cinfo = {
                     "name": channel.name,
                     "enabled": str(channel.enabled),
                     "idx": str(channel.index),
                     "type": channel.type.name
                 }
-            )
+            dev["channels"].append(cinfo)
+            if channel.enabled:
+                dev["enabledChannels"].append(cinfo)
+        return info
+        
+
+def handleCmdInfo(c):
+    info = collectDeviceInfo()
     json_string = json.dumps(info)
     send(json_string + "\n")
 
@@ -158,9 +166,33 @@ def datafeed_in(device, packet):
     elif (packet.type == PacketType.FRAME_END):
         pass
     elif (packet.type == PacketType.LOGIC):
-#        for v in packet.payload.data:
-#           print("{0:08b}".format(v))
-        pass
+        h = hash(device)
+        didx = devicehashes.index(h)
+        outputdata = {
+            "msgtype": "data",
+            "channels": [],
+            "unit":  "LOGIC ",
+            "device": {
+                "hash": h,
+                "id": didx
+            }
+        }
+        data = packet.payload.data
+        dinfo = deviceinfo["deviceinfo"][didx]
+        enabled = len(dinfo["enabledChannels"])
+        # Create Container
+        for c in dinfo["enabledChannels"]:
+            outputdata["channels"].append(c["name"])
+            outputdata[c["name"]] = []
+        # Fill Container with data
+        for i in xrange(0,len(data),packet.payload.unit_size()):
+            for j in xrange(0, enabled):
+                c = dinfo["enabledChannels"][j]
+                value = (data[ i + j / 8] >> (j % 8)) & 1
+                outputdata[c["name"]].append(str(value))
+                
+        json_string = json.dumps(outputdata, sort_keys=True)
+        send(json_string + "\n")
     elif (packet.type == PacketType.ANALOG):
         # https://sigrok.org/api/libsigrok/unstable/bindings/python/a00722.html
         if not len(packet.payload.channels):
@@ -182,7 +214,7 @@ def datafeed_in(device, packet):
                 array.append(str(value))
             outputdata["channels"].append(c.name)
             outputdata[c.name] = array
-        json_string = json.dumps(outputdata)
+        json_string = json.dumps(outputdata, sort_keys=True)
         send(json_string + "\n")
     else:
         print("Unknown PacketType: " + str(packet.type))
@@ -210,7 +242,7 @@ def initDevices(list):
 def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-d', '--driver', help="The driver to use and (if necessary) driver options", nargs="+", action='append')
+        '-d', '--driver', help="The driver incl. scan options and (if necessary) driver options", nargs="+", action='append')
     parser.add_argument('-l', '--loglevel', help="Log level", type=int)
     args = parser.parse_args()
     if not (args.driver):
@@ -240,6 +272,7 @@ if args.loglevel:
     context.log_level = LogLevel.get(int(args.loglevel))
 session = context.create_session()
 initDevices(args.driver)
+deviceinfo = collectDeviceInfo()
 
 # Start
 session.start()
