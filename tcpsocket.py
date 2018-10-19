@@ -14,7 +14,8 @@ def send(msg):
         for s in clients:
             try:
                 s.send(msg)
-            except RuntimeError:
+            except (RuntimeError, socket.error):
+                print("Error sending Data")
                 pass # client disconnected
 
 def getCmds():
@@ -50,7 +51,7 @@ def worker():
                 else:
                     try:
                         data = s.recv(1024)
-                    except SocketError:
+                    except socket.error:
                         print("Errror receiving data")
                         pass
                     if data:
@@ -60,7 +61,6 @@ def worker():
                         except ValueError:
                             print("Error parsing: " + data)
                             pass
-                        
                     else:
                         print("Connection closed!")
                         s.close()

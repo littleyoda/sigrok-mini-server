@@ -88,7 +88,7 @@ def collectDeviceInfo():
                         currentValue = device.config_get(key)
                     if Capability.SET in cap:
                         supportsSet = True
-                    if Capability.GET in cap:
+                    if Capability.LIST in cap:
                         supportsList = True
                     if (not(supportsGet or supportsSet)):
                         continue
