@@ -133,9 +133,14 @@ def handleCmdGet(c):
     dev = devices[devicehashes.index(c["hash"])]   
     key = ConfigKey.get_by_identifier(str(c["key"]))
     value = dev.config_get(key)
+    h = c["hash"]
+    didx = devicehashes.index(h)
     info = {
+               "device": {
+                    "hash": h,
+                    "id": didx
+                },
                     "msgtype": "value",
-                    "device": c["hash"],
                     "key": str(c["key"]),
                     "value": str(value)
            }
@@ -154,11 +159,19 @@ def handleCmd(c):
     elif (cmd == "get"):
         handleCmdGet(c)
 
+def filterCmds(cmds):
+    while len(cmds) > 1:
+        if (cmds[0]["cmd"] == cmds[1]["cmd"]) and (cmds[0]["key"] == cmds[1]["key"]):
+            cmds.pop(0)
+        else:
+            break
+    return cmds
 
 def handleCmds():
     cmds = getCmds()
     if (len(cmds) == 0):
         return
+    cmds = filterCmds(cmds)
     for c in cmds:
         handleCmd(c)
 

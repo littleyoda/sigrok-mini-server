@@ -55,12 +55,12 @@ def worker():
                         print("Errror receiving data")
                         pass
                     if data:
-                        print("Received: " + data)
-                        try:
-                            cmds.append(json.loads(data))
-                        except ValueError:
-                            print("Error parsing: " + data)
-                            pass
+                        for cmd in filter(bool, data.split("\n")):
+                            try:
+                                cmds.append(json.loads(cmd))
+                            except ValueError:
+                                print("Error parsing: " + cmd)
+                                pass
                     else:
                         print("Connection closed!")
                         s.close()
