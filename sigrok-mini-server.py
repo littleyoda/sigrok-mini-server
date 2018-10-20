@@ -115,7 +115,7 @@ def collectDeviceInfo():
                     dev["enabledLogicChannels"].append(cinfo)
             if channel.enabled and channel.type.name == "ANALOG":
                     dev["enabledAnalogChannels"].append(cinfo)
-        return info
+    return info
         
 
 def handleCmdInfo(c):
