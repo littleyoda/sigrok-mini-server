@@ -201,12 +201,12 @@ def datafeed_in(device, packet):
             outputdata["channels"].append(c["name"])
             outputdata[c["name"]] = []
         # Fill Container with data
-        for i in xrange(0,len(data),packet.payload.unit_size()):
+        for values in data:
             for j in xrange(0, enabled):
                 c = dinfo["enabledLogicChannels"][j]
-                value = (data[ i + j / 8] >> (j % 8)) & 1
+                value = (values[ j / 8] >> (j % 8)) & 1
                 outputdata[c["name"]].append(str(value))
-                
+
         json_string = json.dumps(outputdata, sort_keys=True)
         send(json_string + "\n")
     elif (packet.type == PacketType.ANALOG):
