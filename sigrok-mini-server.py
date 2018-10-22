@@ -24,7 +24,6 @@ def openDevice(arg):
         print("Devicename does not exist!")
         sys.exit(1)
     d = context.drivers[driver_spec[0]]
-
     driver_options = {}
     for pair in driver_spec[1:]:
         name, value = pair.split('=')
@@ -39,7 +38,6 @@ def openDevice(arg):
         print("Found more than one device. Using first one!")
         sys.exit(1)
     device = foundDevices[0]
-
     device.open()
     return device
 
@@ -64,8 +62,11 @@ def collectDeviceInfo():
            }
     for device in devices:
         dev = {
+                "name": device.driver.name,
+                "longname": device.driver.long_name,
                 "vendor": device.vendor,
                 "model": device.model,
+                "type": [],
                 "version": device.version,
                 "id": device.connection_id(),
                 "hash": hash(device),
@@ -75,6 +76,11 @@ def collectDeviceInfo():
                 "enabledLogicChannels": []
         }
         info["deviceinfo"].append(dev)
+        for i in device.driver.config_keys():
+            dev["type"].append({
+                "name": i.name,
+                "id": i.id
+            })
         for key in device.config_keys():
             with sigroklock:
                 try:
