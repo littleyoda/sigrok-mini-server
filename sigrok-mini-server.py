@@ -7,91 +7,49 @@ from signal import signal, SIGINT
 import argparse
 import sys
 import json
+import signal
+import time
 
-clients = []
-devices = []
-devicehashes = []
 deviceinfo = {}
+threads = []
+devicehashes = []
+autoget = {}
 
 sigroklock = threading.Lock()
 
-
-def openDevice(arg):
-    print("Creating Device with " + arg)
-    driver_spec = arg.split(":")
-
-    if driver_spec[0] not in context.drivers:
-        print("Devicename does not exist!")
-        sys.exit(1)
-    d = context.drivers[driver_spec[0]]
-    driver_options = {}
-    for pair in driver_spec[1:]:
-        name, value = pair.split('=')
-        key = ConfigKey.get_by_identifier(name)
-        driver_options[name] = key.parse_string(value)
-
-    foundDevices = d.scan(**driver_options)
-    if (len(foundDevices) == 0):
-        print("Device " + arg + " not found")
-        sys.exit(1)
-    if (len(foundDevices) > 1):
-        print("Found more than one device. Using first one!")
-        sys.exit(1)
-    device = foundDevices[0]
-    device.open()
-    return device
-
-
-def hash(device):
-    return device.vendor + ":" + device.model + ":" + device.version + ":" + device.connection_id()
-
-
-def handleDeviceOptions(device, string):
-    for pair in string.split(":"):
-        print(pair)
-        name, value = pair.split('=')
-        print("Setting %s to %s" % (name, value))
-        key = ConfigKey.get_by_identifier(name)
-        device.config_set(key, key.parse_string(value))
-
-
-def collectDeviceInfo():
-    info = {
-                    "msgtype": "deviceinfo",
-                    "deviceinfo": []
-           }
-    for device in devices:
+class DeviceThread(threading.Thread):
+    def __init__(self,context,arg):
+        threading.Thread.__init__(self)
+        self.session = context.create_session()
+        self.device = self.openDevice(d[0])
+        self.session.add_device(self.device)
+        self.hash = hash(self.device)
+        if (len(d) > 1):
+            self.handleDeviceOptions(self.device, d[1])
+        
+    def getInfo(self):
         dev = {
-                "name": device.driver.name,
-                "longname": device.driver.long_name,
-                "vendor": device.vendor,
-                "model": device.model,
-                "type": [],
-                "version": device.version,
-                "id": device.connection_id(),
-                "hash": hash(device),
+                "vendor": self.device.vendor,
+                "model": self.device.model,
+                "version": self.device.version,
+                "id": self.device.connection_id(),
+                "hash": self.hash,
                 "settings": [],
                 "channels": [],
                 "enabledAnalogChannels": [],
                 "enabledLogicChannels": []
         }
-        info["deviceinfo"].append(dev)
-        for i in device.driver.config_keys():
-            dev["type"].append({
-                "name": i.name,
-                "id": i.id
-            })
-        for key in device.config_keys():
+        for key in self.device.config_keys():
             with sigroklock:
                 try:
                     supportsGet = False
                     supportsSet = False
                     supportsList = False
-                    cap = device.config_capabilities(key)
+                    cap = self.device.config_capabilities(key)
                     currentValue = ""
                     if Capability.GET in cap:
                         supportsGet = True
-                        currentValue = device.config_get(key)
+                        currentValue = self.device.config_get(key)
                     if Capability.SET in cap:
                         supportsSet = True
                     if Capability.LIST in cap:
@@ -109,7 +67,7 @@ def collectDeviceInfo():
                        })
                 except Exception as e:
                     print('Exception: ' + str(e))
-        for channel in device.channels:
+        for channel in self.device.channels:
             cinfo = {
                     "name": channel.name,
                     "enabled": str(channel.enabled),
@@ -121,6 +79,98 @@ def collectDeviceInfo():
                     dev["enabledLogicChannels"].append(cinfo)
             if channel.enabled and channel.type.name == "ANALOG":
                     dev["enabledAnalogChannels"].append(cinfo)
+        return dev
+        
+    def run(self):
+        self.session.start()
+        self.session.add_datafeed_callback(datafeed_in)
+        self.session.run()
+        print("Waiting")
+        
+    def stop(self):
+        print("Stopping Device")
+        try:
+            self.session.stop()
+            time.sleep(1)
+            self.device.close()
+        except RuntimeError:
+            pass
+
+    def openDevice(self, arg):
+        print("Creating Device with " + arg)
+        driver_spec = arg.split(":")
+
+        if driver_spec[0] not in context.drivers:
+            print("Devicename does not exist!")
+            sys.exit(1)
+        d = context.drivers[driver_spec[0]]
+
+        driver_options = {}
+        for pair in driver_spec[1:]:
+            name, value = pair.split('=')
+            key = ConfigKey.get_by_identifier(name)
+            driver_options[name] = key.parse_string(value)
+
+        foundDevices = d.scan(**driver_options)
+        if (len(foundDevices) == 0):
+            print("Device " + arg + " not found")
+            sys.exit(1)
+        if (len(foundDevices) > 1):
+            print("Found more than one device. Using first one!")
+            sys.exit(1)
+        device = foundDevices[0]
+
+        device.open()
+        return device
+
+    def handleDeviceOptions(self, device, string):
+            for pair in string.split(":"):
+                name, value = pair.split('=')
+                print("Setting %s to %s" % (name, value))
+                key = ConfigKey.get_by_identifier(name)
+                device.config_set(key, key.parse_string(value))
+                
+    def handleCmdSet(self, c):
+        try:
+            key = ConfigKey.get_by_identifier(str(c["key"]))
+            self.device.config_set(key, key.parse_string(str(c["value"])))
+        except (ValueError, RuntimeError):
+            print("ValueError: " + str(c["key"]) + " " + str(c["value"]))
+    
+    def handleCmdGet(self, c):
+        try:
+            dev = self.device
+            key = ConfigKey.get_by_identifier(str(c["key"]))
+            value = dev.config_get(key)
+            didx = devicehashes.index(self.hash)
+            info = {
+               "device": {
+                    "hash": self.hash,
+                    "id": didx
+                },
+                    "msgtype": "value",
+                    "key": str(c["key"]),
+                    "value": str(value)
+               }
+            json_string = json.dumps(info)
+            send(json_string + "\n")
+        except (ValueError, KeyError, RuntimeError):
+            print("[" + self.hash + "] Error " + str(c["key"]))
+                
+
+
+def hash(device):
+    return device.vendor + ":" + device.model + ":" + device.version 
+    #+ ":" + device.connection_id()
+
+
+def collectDeviceInfo():
+    info = {
+                    "msgtype": "deviceinfo",
+                    "deviceinfo": []
+           }
+    for t in threads:
+        info["deviceinfo"].append(t.getInfo())
     return info
         
 
@@ -129,42 +179,37 @@ def handleCmdInfo(c):
     json_string = json.dumps(info)
     send(json_string + "\n")
 
-
-def handleCmdSet(c):
-    dev = devices[devicehashes.index(c["hash"])]   
-    key = ConfigKey.get_by_identifier(str(c["key"]))
-    dev.config_set(key, key.parse_string(str(c["value"])))
-    
-def handleCmdGet(c):
-    dev = devices[devicehashes.index(c["hash"])]   
-    key = ConfigKey.get_by_identifier(str(c["key"]))
-    value = dev.config_get(key)
-    h = c["hash"]
-    didx = devicehashes.index(h)
-    info = {
-               "device": {
-                    "hash": h,
-                    "id": didx
-                },
-                    "msgtype": "value",
-                    "key": str(c["key"]),
-                    "value": str(value)
-           }
-    json_string = json.dumps(info)
-    send(json_string + "\n")
-
-
 def handleCmd(c):
     cmd = c["cmd"].lower();
     print("Cmd" + cmd)
     if (cmd == "info"):
         handleCmdInfo(c)
-    elif (cmd == "set"):
-        handleCmdSet(c)
-        handleCmdGet(c) # Return changed Value
-    elif (cmd == "get"):
-        handleCmdGet(c)
+        return
+    if (cmd == "autoget"):
+        print(cmd)
+        if (c["key"] in autoget):
+            print("FOUND")
+        else:
+            autoget[c["key"]] = {
+                "key": c["key"],
+                "next": 0,
+                "interval": float(c["interval"])
+            }
+        print(autoget)
+        return
+    print(c)
+    for t in threads:
+        if (t.hash == c["hash"] or c["hash"] == "*"):
+            if (cmd == "set"):
+                t.handleCmdSet(c)
+                t.handleCmdGet(c) # Return changed Value
+            elif (cmd == "get"):
+                t. handleCmdGet(c)
+            else:
+                print("Unknown Command: " + cmd)
 
+
+# remove duplicates 
 def filterCmds(cmds):
     while len(cmds) > 1:
         if (cmds[0]["cmd"] == cmds[1]["cmd"]) and (cmds[0]["key"] == cmds[1]["key"]):
@@ -183,6 +228,8 @@ def handleCmds():
 
 
 def datafeed_in(device, packet):
+    if not("deviceinfo" in deviceinfo):
+        return
     if (packet.type == PacketType.FRAME_BEGIN):
         pass
     elif (packet.type == PacketType.FRAME_END):
@@ -207,12 +254,12 @@ def datafeed_in(device, packet):
             outputdata["channels"].append(c["name"])
             outputdata[c["name"]] = []
         # Fill Container with data
-        for values in data:
+        for i in xrange(0,len(data),packet.payload.unit_size()):
             for j in xrange(0, enabled):
                 c = dinfo["enabledLogicChannels"][j]
-                value = (values[ j / 8] >> (j % 8)) & 1
+                value = (data[ i + j / 8] >> (j % 8)) & 1
                 outputdata[c["name"]].append(str(value))
-
+                
         json_string = json.dumps(outputdata, sort_keys=True)
         send(json_string + "\n")
     elif (packet.type == PacketType.ANALOG):
@@ -242,24 +289,6 @@ def datafeed_in(device, packet):
         print("Unknown PacketType: " + str(packet.type))
     handleCmds()
 
-def exitHandler(signum, frame):
-    setKillFlag()
-    session.stop
-    for d in devices:
-        d.close()
-    sys.exit(1)
-
-def initDevices(list):
-    for d in list:
-        # d[0] => Device Options
-        # d[1] => Config Options
-        device = openDevice(d[0])
-        devices.append(device)
-        session.add_device(device)
-        devicehashes.append(hash(device))
-
-        if (len(d) > 1):
-            handleDeviceOptions(device, d[1])
 
 def parseArgs():
     parser = argparse.ArgumentParser()
@@ -279,6 +308,20 @@ def parseArgs():
             sys.exit(1)
     return args
 
+
+
+def exitHandler(signum, frame):
+    print("==================================================")
+    print("Shutting down! Can take same seconds! Please wait!")
+    print("==================================================")
+    setKillFlag()
+    for t in threads:
+        t.stop()
+    sys.exit(1)
+
+
+
+    
 #
 #
 #
@@ -292,15 +335,34 @@ args = parseArgs()
 context = Context.create()
 if args.loglevel:
     context.log_level = LogLevel.get(int(args.loglevel))
-session = context.create_session()
-initDevices(args.driver)
+    
+
+for d in args.driver:
+    t = DeviceThread(context, d)
+    devicehashes.append(t.hash)
+    threads.append(t)
+
 deviceinfo = collectDeviceInfo()
 
-# Start
-session.start()
-startWorkerThread()
-session.add_datafeed_callback(datafeed_in)
+for t in threads:
+    t.start()
 
-# Clean-Up
-signal(SIGINT, exitHandler)
-session.run()
+startWorkerThread()
+
+signal.signal(signal.SIGINT, exitHandler)
+try:
+    while True:
+        now = time.time()
+        for k, v in autoget.items():
+            if (v["next"] < now):
+                print("Excute " + str(k))
+                handleCmd( {
+                "cmd": "get",
+                "key": k,
+                "hash": "*"
+                })
+                v["next"] = now + v["interval"] / 1000
+                break # just one request
+        time.sleep(0.05)
+except:
+    exitHandler(False, False)
