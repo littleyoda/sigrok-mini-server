@@ -5,12 +5,10 @@ Delivers data from sigrok supported devices via TCP/IP in JSON Format
 * early development stage
 * only tested under linux
 * hardly any error handling
-* only analog sigrok packets supported, no logic packets
+* analog and digital sigrok packets supported
 
 # How to use (under Linux)
-Currently you need a patched version of sigrok
-
-see https://github.com/sigrokproject/libsigrok/pull/14
+Libsigrok 0.5.1 does not work. Currently you need the git version of libsigrok. 
 
 On the first console
 `./sigrok-mini-server.py  -d demo samplerate=1`
