@@ -14,7 +14,7 @@ see https://github.com/sigrokproject/libsigrok/pull/14
 
 On the first console
 `./sigrok-mini-server.py  -d demo samplerate=1`
-
+ls
 On the second console
 `nc localhost 8888`
 
@@ -24,10 +24,15 @@ Every second you should see new data in json format
 {"channels": ["A1"], "device": {"hash": ":Demo device::", "id": 0}, "A1": ["9.51056"], "msgtype": "data"}
 {"channels": ["A0"], "device": {"hash": ":Demo device::", "id": 0}, "msgtype": "data", "A0": ["-10.0"]}
 {"channels": ["A2"], "device": {"hash": ":Demo device::", "id": 0}, "A2": ["8.0"], "msgtype": "data"}
+
 ```
 
+# Commands in examples
+
 ## Information about connected devices
-Sending `{ "cmd": "INFO" }` to the server, you will receive a message with information about all connected devices.
+Request:`{ "cmd": "INFO" }` 
+
+Response: You will receive a message with information about all connected devices.
 The value of the hash-attribute is used to identify the device in all messages related to the device
 
 ```
@@ -127,9 +132,17 @@ Request:
 Response:
 `{"device": ":Demo device::", "msgtype": "value", "value": "1", "key": "samplerate"}`
 
+## Auto Get Config
+Request:
+`{ "cmd":"autoget", "hash":"*", "key": "voltage_target", "interval": "500"}`
+
+Response:
+Get Config-Responses ever 500 ms
 
 # Multiple Devices
 You can access more than one device
 
 e.g.`sigrok-mini-server.py -d demo samplerate=1 -d korad-kaxxxxp:conn=/dev/ttyACM0`
+
+
 
